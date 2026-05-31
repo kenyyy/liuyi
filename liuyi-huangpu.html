@@ -191,6 +191,23 @@ body {
   50% { box-shadow: 0 0 50px rgba(255,215,0,1), 0 0 90px rgba(255,165,0,0.7); }
 }
 
+/* 音效状态指示 */
+.sound-hint {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  color: #FFD700;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.sound-hint.show { opacity: 1; }
+
 @media (max-width: 480px) {
   .btns { flex-direction: column; align-items: center; }
   .btn { width: 80%; max-width: 200px; }
@@ -274,7 +291,133 @@ body {
   </div>
 </div>
 
+<!-- 音效提示 -->
+<div class="sound-hint" id="soundHint">🔊 音效已开启</div>
+
 <script>
+// ========== Web Audio 音效引擎 ==========
+var audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // 解锁音频（移动端需要用户交互后才能播放）
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+// 烟花发射音效（上升的嘶嘶声）
+function playLaunchSound() {
+  if (!audioCtx) return;
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  var filter = audioCtx.createBiquadFilter();
+  
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+  
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
+  
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+  
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.35);
+}
+
+// 烟花爆炸音效（砰！）
+function playExplosionSound() {
+  if (!audioCtx) return;
+  var bufferSize = audioCtx.sampleRate * 0.3;
+  var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  var data = buffer.getChannelData(0);
+  
+  for (var i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+  }
+  
+  var source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  
+  var filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 600;
+  
+  var gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+  
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  source.start();
+}
+
+// 彩带音效（沙沙声）
+function playConfettiSound() {
+  if (!audioCtx) return;
+  var bufferSize = audioCtx.sampleRate * 0.5;
+  var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  var data = buffer.getChannelData(0);
+  
+  for (var i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+  }
+  
+  var source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  
+  var filter = audioCtx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 2000;
+  
+  var gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+  
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  source.start();
+}
+
+// 爱心音效（叮~）
+function playHeartSound() {
+  if (!audioCtx) return;
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1);
+  
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+  
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.4);
+}
+
+// 显示音效提示
+function showSoundHint() {
+  var hint = document.getElementById('soundHint');
+  hint.classList.add('show');
+  setTimeout(function() { hint.classList.remove('show'); }, 1500);
+}
+
 // ========== 星星生成 ==========
 (function(){
   var bg = document.getElementById('bgLayer');
@@ -313,6 +456,9 @@ function Rocket(x, ty) {
   this.trail = [];
   this.alive = true;
   this.hue = Math.random() * 360;
+  
+  // 播放发射音效
+  playLaunchSound();
 }
 
 Rocket.prototype.update = function() {
@@ -350,7 +496,7 @@ function Particle(x, y, hue, type) {
   this.x = x;
   this.y = y;
   this.hue = hue;
-  this.type = type || 'sphere'; // sphere, chrys, palm, willow
+  this.type = type || 'sphere';
 
   var angle = Math.random() * Math.PI * 2;
   var speed = 1 + Math.random() * 6;
@@ -364,7 +510,6 @@ function Particle(x, y, hue, type) {
   this.trail = [];
   this.size = 1.5 + Math.random() * 1.5;
 
-  // 不同类型效果
   if (this.type === 'willow') {
     this.decay = 0.004 + Math.random() * 0.008;
     this.gravity = 0.02;
@@ -384,7 +529,6 @@ Particle.prototype.update = function() {
 };
 
 Particle.prototype.draw = function() {
-  // 尾迹
   for (var i = 0; i < this.trail.length; i++) {
     var t = this.trail[i];
     var a = (i / this.trail.length) * this.alpha * 0.5;
@@ -393,7 +537,6 @@ Particle.prototype.draw = function() {
     ctx.fillStyle = 'hsla(' + this.hue + ',100%,70%,' + a + ')';
     ctx.fill();
   }
-  // 主体
   ctx.beginPath();
   ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
   ctx.fillStyle = 'hsla(' + this.hue + ',100%,75%,' + this.alpha + ')';
@@ -405,11 +548,13 @@ Particle.prototype.draw = function() {
 
 // --- 爆炸函数 ---
 function explode(x, y, baseHue) {
+  // 播放爆炸音效
+  playExplosionSound();
+  
   var count = 60 + Math.floor(Math.random() * 40);
   var types = ['sphere','chrys','willow','palm'];
   var type = types[Math.floor(Math.random() * types.length)];
 
-  // 随机色相偏移，产生丰富色彩
   for (var i = 0; i < count; i++) {
     var hue = baseHue + (Math.random() - 0.5) * 60;
     if (hue < 0) hue += 360;
@@ -417,7 +562,7 @@ function explode(x, y, baseHue) {
     particles.push(new Particle(x, y, hue, type));
   }
 
-  // 二次爆炸（金色芯）
+  // 二次爆炸
   if (Math.random() > 0.5) {
     setTimeout(function(px, py) {
       for (var j = 0; j < 20; j++) {
@@ -438,20 +583,17 @@ function launchRocket() {
 function loop() {
   if (!isRunning && rockets.length === 0 && particles.length === 0) return;
 
-  // 半透明覆盖，产生拖尾效果
   ctx.globalCompositeOperation = 'destination-out';
   ctx.fillStyle = 'rgba(0,0,0,0.15)';
   ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'lighter';
 
-  // 更新火箭
   rockets = rockets.filter(function(r) {
     r.update();
     r.draw();
     return r.alive;
   });
 
-  // 更新粒子
   particles = particles.filter(function(p) {
     p.update();
     p.draw();
@@ -478,6 +620,9 @@ function stopFireworks() {
 
 // ========== 彩带 ==========
 function throwCF() {
+  // 播放彩带音效
+  playConfettiSound();
+  
   var layer = document.getElementById('fxLayer');
   var cols = ['#FFD700','#FFA500','#FF6347','#FF69B4','#00BFFF','#FFF','#FF4500','#FF1493','#7B68EE','#00FA9A'];
   for (var i = 0; i < 45; i++) {
@@ -504,6 +649,9 @@ function throwCF() {
 
 // ========== 爱心 ==========
 function sendHT() {
+  // 播放爱心音效
+  playHeartSound();
+  
   var layer = document.getElementById('fxLayer');
   var emos = ['💖','💗','💘','💝','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍'];
   for (var i = 0; i < 14; i++) {
@@ -538,6 +686,10 @@ var curMode = null;
 var timers = {};
 
 function go(mode) {
+  // 初始化音频（需要用户交互）
+  initAudio();
+  showSoundHint();
+  
   if (curMode === mode) { stopAll(); return; }
   stopAll();
 
