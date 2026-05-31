@@ -342,120 +342,186 @@ body {
 <div class="sound-hint" id="soundHint">🔊 音效已开启</div>
 
 <script>
-// ========== Web Audio 音效引擎 ==========
+// ========== 专业音效引擎 ==========
 var audioCtx = null;
+var masterGain = null;
 
 function initAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.4;
+    masterGain.connect(audioCtx.destination);
   }
-  // 解锁音频（移动端需要用户交互后才能播放）
   if (audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
 }
 
-// 烟花发射音效（上升的嘶嘶声）
+// 烟花发射音效 - 柔和的上升声（火箭上升感）
 function playLaunchSound() {
   if (!audioCtx) return;
-  var osc = audioCtx.createOscillator();
-  var gain = audioCtx.createGain();
+  var t = audioCtx.currentTime;
+  
+  // 白噪声源（嘶嘶声）
+  var bufferSize = audioCtx.sampleRate * 0.8;
+  var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  var data = buffer.getChannelData(0);
+  for (var i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1);
+  }
+  var noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  
+  // 滤波器 - 从低到高扫频（模拟上升）
   var filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.Q.value = 1;
+  filter.frequency.setValueAtTime(200, t);
+  filter.frequency.exponentialRampToValueAtTime(2000, t + 0.6);
   
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+  // 音量包络 - 渐强渐弱
+  var gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.3, t + 0.1);
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
   
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
-  
-  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-  
-  osc.connect(filter);
+  noise.connect(filter);
   filter.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(masterGain);
   
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.35);
+  noise.start(t);
+  noise.stop(t + 0.8);
 }
 
-// 烟花爆炸音效（砰！）
+// 烟花爆炸音效 - 分层的爆炸声（嘭~）
 function playExplosionSound() {
   if (!audioCtx) return;
-  var bufferSize = audioCtx.sampleRate * 0.3;
+  var t = audioCtx.currentTime;
+  
+  // 第一层：低频冲击（嘭）
+  var osc1 = audioCtx.createOscillator();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(80, t);
+  osc1.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+  
+  var gain1 = audioCtx.createGain();
+  gain1.gain.setValueAtTime(0.5, t);
+  gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+  
+  osc1.connect(gain1);
+  gain1.connect(masterGain);
+  
+  // 第二层：中频爆裂
+  var osc2 = audioCtx.createOscillator();
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(200, t);
+  osc2.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+  
+  var gain2 = audioCtx.createGain();
+  gain2.gain.setValueAtTime(0.25, t);
+  gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+  
+  osc2.connect(gain2);
+  gain2.connect(masterGain);
+  
+  // 第三层：高频爆点（啪）
+  var bufferSize = audioCtx.sampleRate * 0.15;
   var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
   var data = buffer.getChannelData(0);
-  
   for (var i = 0; i < bufferSize; i++) {
-    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.05));
   }
+  var crack = audioCtx.createBufferSource();
+  crack.buffer = buffer;
   
-  var source = audioCtx.createBufferSource();
-  source.buffer = buffer;
+  var filter3 = audioCtx.createBiquadFilter();
+  filter3.type = 'highpass';
+  filter3.frequency.value = 800;
   
-  var filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 600;
+  var gain3 = audioCtx.createGain();
+  gain3.gain.value = 0.15;
   
-  var gain = audioCtx.createGain();
-  gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+  crack.connect(filter3);
+  filter3.connect(gain3);
+  gain3.connect(masterGain);
   
-  source.connect(filter);
-  filter.connect(gain);
-  gain.connect(audioCtx.destination);
-  
-  source.start();
+  osc1.start(t);
+  osc1.stop(t + 0.3);
+  osc2.start(t);
+  osc2.stop(t + 0.2);
+  crack.start(t);
 }
 
-// 彩带音效（沙沙声）
+// 彩带音效 - 轻盈的沙沙声
 function playConfettiSound() {
   if (!audioCtx) return;
-  var bufferSize = audioCtx.sampleRate * 0.5;
-  var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-  var data = buffer.getChannelData(0);
+  var t = audioCtx.currentTime;
   
-  for (var i = 0; i < bufferSize; i++) {
-    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+  // 多层沙沙声
+  for (var layer = 0; layer < 3; layer++) {
+    var bufferSize = audioCtx.sampleRate * 1.2;
+    var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    var data = buffer.getChannelData(0);
+    
+    for (var i = 0; i < bufferSize; i++) {
+      var env = Math.exp(-i / (bufferSize * 0.2)) * Math.sin(i / 1000 + layer);
+      data[i] = (Math.random() * 2 - 1) * env * 0.3;
+    }
+    
+    var source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    
+    var filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 3000 + layer * 1500;
+    filter.Q.value = 0.5;
+    
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.08, t + layer * 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 1.2);
+    
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    
+    source.start(t + layer * 0.05);
   }
-  
-  var source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  
-  var filter = audioCtx.createBiquadFilter();
-  filter.type = 'highpass';
-  filter.frequency.value = 2000;
-  
-  var gain = audioCtx.createGain();
-  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-  
-  source.connect(filter);
-  filter.connect(gain);
-  gain.connect(audioCtx.destination);
-  
-  source.start();
 }
 
-// 爱心音效（叮~）
+// 爱心音效 - 风铃般的叮铃声
 function playHeartSound() {
   if (!audioCtx) return;
-  var osc = audioCtx.createOscillator();
-  var gain = audioCtx.createGain();
+  var t = audioCtx.currentTime;
   
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.1);
+  // 和弦：523Hz (C5) + 659Hz (E5) + 784Hz (G5)
+  var freqs = [523, 659, 784, 1047];
   
-  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-  
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.4);
+  freqs.forEach(function(freq, idx) {
+    var osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.15, t + idx * 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+    
+    // 添加颤音效果
+    var vibrato = audioCtx.createOscillator();
+    vibrato.frequency.value = 5;
+    var vibratoGain = audioCtx.createGain();
+    vibratoGain.gain.value = 3;
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(osc.frequency);
+    vibrato.start(t);
+    vibrato.stop(t + 1.5);
+    
+    osc.connect(gain);
+    gain.connect(masterGain);
+    
+    osc.start(t + idx * 0.03);
+    osc.stop(t + 1.5);
+  });
 }
 
 // 显示音效提示
