@@ -816,9 +816,28 @@ var bgMusicPlaying = false;
 
 function initBgMusic() {
   if (!bgMusic) {
-    bgMusic = new Audio('02.温柔.(1).mp3');
-    bgMusic.loop = true;
-    bgMusic.volume = 0.5;
+    // 尝试多个可能的路径
+    var paths = ['bg-music.mp3', './bg-music.mp3', '/liuyi/bg-music.mp3'];
+    var idx = 0;
+    
+    function tryLoad() {
+      if (idx >= paths.length) {
+        console.error('所有路径都无法加载音乐');
+        return;
+      }
+      bgMusic = new Audio(paths[idx]);
+      bgMusic.loop = true;
+      bgMusic.volume = 0.5;
+      bgMusic.load();
+      
+      bgMusic.onerror = function() {
+        console.log('路径失败: ' + paths[idx]);
+        idx++;
+        tryLoad();
+      };
+    }
+    
+    tryLoad();
   }
 }
 
