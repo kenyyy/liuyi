@@ -324,6 +324,7 @@ body {
 <div class="main">
   <h1 class="title">🎉 六一快乐 🎉</h1>
   <p class="sub">✨ 魔都之夜 ✨</p>
+  <p id="clock" style="color:#FFD700;font-size:clamp(0.9rem,2.5vw,1.1rem);margin-bottom:30px;font-weight:600;letter-spacing:0.15em;text-shadow:0 0 8px rgba(255,215,0,0.4);"></p>
   <div class="btns">
     <button class="btn" id="btnFw">🎆 烟花</button>
     <button class="btn" id="btnCf">🎊 彩带</button>
@@ -548,6 +549,8 @@ document.getElementById('enableSound').addEventListener('click', function() {
     osc.start();
     osc.stop(audioCtx.currentTime + 0.3);
   }
+    // 自动启动背景音乐
+    if (typeof startBgm === "function") startBgm();
 });
 
 // ========== 星星生成 ==========
@@ -927,6 +930,17 @@ document.getElementById('btnFw').addEventListener('click', function(){ go('fw');
 document.getElementById('btnCf').addEventListener('click', function(){ go('cf'); });
 document.getElementById('btnHt').addEventListener('click', function(){ go('ht'); });
 document.getElementById('btnBgMusic').addEventListener('click', toggleBgMusic);
+// ========= 时钟 =========
+function updateClock() {
+  var now = new Date();
+  var h = String(now.getHours()).padStart(2, '0');
+  var m = String(now.getMinutes()).padStart(2, '0');
+  var s = String(now.getSeconds()).padStart(2, '0');
+  var el = document.getElementById('clock');
+  if (el) el.textContent = h + ':' + m + ':' + s;
+}
+updateClock();
+setInterval(updateClock, 1000);
 </script>
 </body>
 </html>
