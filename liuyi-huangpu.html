@@ -810,54 +810,68 @@ function addBL() {
   setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); }, 15000);
 }
 
-// ========== 背景音乐 ==========
-var bgMusic = null;
-var bgMusicPlaying = false;
+// ========== 背景音乐（Web Audio 实时合成，零版权）==========
 
-function initBgMusic() {
-  if (!bgMusic) {
-    // 尝试多个可能的路径
-    var paths = ['bg-music.mp3', './bg-music.mp3', '/liuyi/bg-music.mp3'];
-    var idx = 0;
-    
-    function tryLoad() {
-      if (idx >= paths.length) {
-        console.error('所有路径都无法加载音乐');
-        return;
-      }
-      bgMusic = new Audio(paths[idx]);
-      bgMusic.loop = true;
-      bgMusic.volume = 0.5;
-      bgMusic.load();
-      
-      bgMusic.onerror = function() {
-        console.log('路径失败: ' + paths[idx]);
-        idx++;
-        tryLoad();
-      };
+var _bgmOn = false;
+var _bgmTimer = null;
+
+// C大调欢快旋律 [频率Hz, 时长s]
+var BGM_NOTES = [
+  [523, 0.18], [587, 0.15], [659, 0.18], [698, 0.22],
+  [784, 0.35], [698, 0.15], [659, 0.20], [587, 0.30],
+  [523, 0.25], [494, 0.30]
+];
+
+function startBgm() {
+  if (_bgmOn) return;
+  if (!audioCtx) initAudio();
+  _bgmOn = true;
+  console.log('[BGM] 开始播放');
+
+  var pos = 0;
+  var t0 = audioCtx.currentTime + 0.05;
+
+  function scheduleNext() {
+    if (!_bgmOn) return;
+    if (pos >= BGM_NOTES.length) {
+      // 循环：延迟后重新开始
+      setTimeout(function() { pos = 0; t0 = audioCtx.currentTime + 0.05; scheduleNext(); }, 5000);
+      return;
     }
-    
-    tryLoad();
+
+    var freq = BGM_NOTES[pos][0];
+    var dur  = BGM_NOTES[pos][1];
+
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+
+    osc.type = 'triangle';   // 温暖音色
+    osc.frequency.setValueAtTime(freq, t0);
+
+    gain.gain.setValueAtTime(0.10, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur - 0.02);
+
+    osc.connect(gain);
+    gain.connect(masterGain || audioCtx.destination);
+
+    osc.start(t0);
+    osc.stop(t0 + dur);
+
+    t0 += dur;
+    pos++;
+
+    _bgmTimer = setTimeout(scheduleNext, (dur * 1000) - 30);
   }
+
+  scheduleNext();
 }
 
-function toggleBgMusic() {
-  initAudio();
-  if (!bgMusic) initBgMusic();
-  
-  if (bgMusicPlaying) {
-    bgMusic.pause();
-    bgMusicPlaying = false;
-    document.getElementById('btnBgMusic').classList.remove('on');
-  } else {
-    bgMusic.play().then(function() {
-      bgMusicPlaying = true;
-      document.getElementById('btnBgMusic').classList.add('on');
-    }).catch(function() {
-      console.log('播放失败，请先点击音效激活按钮');
-    });
-  }
+function stopBgm() {
+  _bgmOn = false;
+  if (_bgmTimer) { clearTimeout(_bgmTimer); _bgmTimer = null; }
+  console.log('[BGM] 已停止');
 }
+
 
 // ========== 模式切换 ==========
 var curMode = null;
