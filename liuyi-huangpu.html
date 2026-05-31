@@ -328,6 +328,7 @@ body {
     <button class="btn" id="btnFw">🎆 烟花</button>
     <button class="btn" id="btnCf">🎊 彩带</button>
     <button class="btn" id="btnHt">💖 爱心</button>
+    <button class="btn" id="btnBgMusic">🎵 音乐</button>
   </div>
 </div>
 
@@ -809,6 +810,36 @@ function addBL() {
   setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); }, 15000);
 }
 
+// ========== 背景音乐 ==========
+var bgMusic = null;
+var bgMusicPlaying = false;
+
+function initBgMusic() {
+  if (!bgMusic) {
+    bgMusic = new Audio('02.温柔.(1).mp3');
+    bgMusic.loop = true;
+    bgMusic.volume = 0.5;
+  }
+}
+
+function toggleBgMusic() {
+  initAudio();
+  if (!bgMusic) initBgMusic();
+  
+  if (bgMusicPlaying) {
+    bgMusic.pause();
+    bgMusicPlaying = false;
+    document.getElementById('btnBgMusic').classList.remove('on');
+  } else {
+    bgMusic.play().then(function() {
+      bgMusicPlaying = true;
+      document.getElementById('btnBgMusic').classList.add('on');
+    }).catch(function() {
+      console.log('播放失败，请先点击音效激活按钮');
+    });
+  }
+}
+
 // ========== 模式切换 ==========
 var curMode = null;
 var timers = {};
@@ -862,6 +893,7 @@ function stopAll() {
 document.getElementById('btnFw').addEventListener('click', function(){ go('fw'); });
 document.getElementById('btnCf').addEventListener('click', function(){ go('cf'); });
 document.getElementById('btnHt').addEventListener('click', function(){ go('ht'); });
+document.getElementById('btnBgMusic').addEventListener('click', toggleBgMusic);
 </script>
 </body>
 </html>
